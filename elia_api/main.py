@@ -1,23 +1,19 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from elia_api.models.account import CreateAccount, CreateAccountIn
 
-app = FastAPI()
-
-
-account_table = {}
+from elia_api.database import database
+from elia_api.routers.account import router as account_router
 
 
-@app.post("/create-account", response_model=CreateAccount)
-async def create_account(post: CreateAccountIn):
-    data = post.model_dump()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await database.connect()
+    yield
+    await database.disconnect()
 
-    last_record_id = len(account_table)
-    new_post = {**data, "id": last_record_id}
 
-    account_table[last_record_id] = new_post
+app = FastAPI(lifespan=lifespan)
 
-    return new_post
 
-@app.get("/")
-async def root():
-    return {"message": "omg its working in azure now"}
+app.include_router(account_router)
