@@ -10,29 +10,35 @@ class BaseConfig(BaseSettings):
 
 
 class GlobalConfig(BaseConfig):
-    DATABASE_URL: Optional[str] = None
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_HOST: str
+    DB_PORT: int
+    DB_NAME: str
     DB_FORCE_ROLL_BACK: bool = False
 
+    DATABASE_URL: str = ""
 
-class DevConfig(GlobalConfig):
-    model_config = SettingsConfigDict(env_prefix="DEV_")
+    model_config = SettingsConfigDict(env_prefix="")
+
+    def __init__(self, **values):
+        super().__init__(**values)
+        self.DATABASE_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
-class ProdConfig(GlobalConfig):
-    model_config = SettingsConfigDict(env_prefix="PROD_")
-
-
-class Testconfig(GlobalConfig):
-    DATABASE_URL: str = "sqlite:///test.db"
+class TestConfig(GlobalConfig):
+    TEST_DB_NAME: str = "test-db"
     DB_FORCE_ROLL_BACK: bool = True
 
-    model_config = SettingsConfigDict(env_prefix="TEST_")
+    def __init__(self, **values):
+        super().__init__(**values)
+        self.DATABASE_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
 
 
 @lru_cache()
 def get_config(env_state: str):
-    configs = {"dev": DevConfig, "prod": ProdConfig, "test": Testconfig}
-    return configs[env_state]()
+    configs = {"test": TestConfig}
+    return configs.get(env_state, GlobalConfig)()
 
 
 config = get_config(BaseConfig().ENV_STATE)

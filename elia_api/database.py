@@ -10,14 +10,14 @@ accounts_table = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("email", sqlalchemy.String),
-    sqlalchemy.Column("password", sqlalchemy.String)
+    sqlalchemy.Column("password", sqlalchemy.String),
 )
 
-engine = sqlalchemy.create_engine(
-    config.DATABASE_URL, connect_args={"check_same_thread": False}
-)
+DATABASE_URL = config.DATABASE_URL
+DB_FORCE_ROLL_BACK = config.DB_FORCE_ROLL_BACK
+
+engine = sqlalchemy.create_engine(DATABASE_URL)
 
 metadata.create_all(engine)
-database = databases.Database(
-    config.DATABASE_URL, force_rollback=config.DB_FORCE_ROLL_BACK
-)
+
+database = databases.Database(DATABASE_URL, force_rollback=DB_FORCE_ROLL_BACK)
