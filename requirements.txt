@@ -1,3 +1,7 @@
 FastAPI
 uvicorn[standard]
 gunicorn
+python-dotenv
+pydantic_settings
+databases[postgresql]
+psycopg2-binary
