@@ -5,12 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
 
 from elia_api.database import database
 from elia_api.routers.account import router as account_router
+from elia_api.config import config
 
 # CORS settings
 origins = [
-    "http://localhost:8080",  # Frontend running locally
-    "http://127.0.0.1:8080",
-    "https://frontend-domain.com",  # Add production frontend domain at some point
+    config.FRONTEND_URL,  # Add production frontend domain at some point
 ]
 
 @asynccontextmanager
