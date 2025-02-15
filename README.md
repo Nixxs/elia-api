@@ -73,11 +73,28 @@ This project is a stepping stone toward smarter geospatial tools, showcasing the
 
 ---
 
-## **Next Steps**
-- Set up the FastAPI back-end to handle Gemini and ArcGIS REST API integrations.
-- Build a React front-end with Google Maps integration.
-- Develop function-calling workflows to query and interpret ArcGIS Server data.
-- Enable users to upload or provide live URLs for geospatial analysis.
+## **Setting up your dev environment**
+- Clone the repo down locally
+- setup your .env:
+    ```
+    ENV_STATE=global
+    DB_NAME=elia-api-db
+    DB_HOST=localhost
+    DB_PORT=5432 
+    DB_SSL=prefer 
+    DB_USER=postgres
+    DB_PASSWORD=pa55word
+
+    FRONTEND_URL=http://127.0.0.1:8080
+    ```
+- setup python virtual environment
+    - `python -m venv .venv`
+- install dependancies with
+    - `python -m pip install -r requirements.txt`
+- start the database via docker using the docker-compose
+    - `docker-compose up -d`
+- start the local dev environment with (note that the port is 8001 because docker will run on 8000)
+    - `uvicorn elia_api.main:app --reload --port 8001`
 
 ---
 

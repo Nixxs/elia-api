@@ -17,6 +17,8 @@ class GlobalConfig(BaseConfig):
     DB_NAME: str
     DB_FORCE_ROLL_BACK: bool = False
 
+    FRONTEND_URL: str
+
     DATABASE_URL: str = ""
 
     model_config = SettingsConfigDict(env_prefix="")
