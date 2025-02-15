@@ -82,8 +82,10 @@ stages:
 
     - script: |
         docker build -t $(acrName).azurecr.io/$(imageName):$(Build.BuildId) .
+        docker tag $(acrName).azurecr.io/$(imageName):$(Build.BuildId) $(acrName).azurecr.io/$(imageName):latest
         docker push $(acrName).azurecr.io/$(imageName):$(Build.BuildId)
-      displayName: 'Build and Push Docker Image'
+        docker push $(acrName).azurecr.io/$(imageName):latest
+      displayName: 'Build and Push Docker Image with latest tag'
 
     - script: |
         echo "##vso[task.setvariable variable=imageTag;]$(Build.BuildId)"
