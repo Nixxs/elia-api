@@ -25,6 +25,7 @@ services:
       - DB_SSL=${DB_SSL} 
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
+      - FRONTEND_URL=${FRONTEND_URL}
     depends_on:
       db:
         condition: service_started
