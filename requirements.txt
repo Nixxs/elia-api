@@ -8,3 +8,6 @@ psycopg2-binary
 pytest
 httpx
 fastapi[all]
+rich
+asgi-correlation-id
+python-json-logger
