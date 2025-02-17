@@ -18,7 +18,7 @@ async def find_account(account_id: int):
 
 @router.post("/create-account", response_model=CreateAccount, status_code=201)
 async def create_account(account: CreateAccountIn):
-    logger.info(f"Creating account: {account}")
+    logger.info("Creating account")
 
     data = account.model_dump()
     query = accounts_table.insert().values(data)
