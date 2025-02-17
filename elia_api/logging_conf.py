@@ -1,9 +1,15 @@
+import os
 from logging.config import dictConfig
 
 from elia_api.config import DevConfig, config
 
 
 def configure_logging() -> None:
+    is_azure = os.getenv("WEBSITE_SITE_NAME") is not None  # Detect if running in Azure App Service
+    log_dir = "/home/logs" if is_azure else "."  # Use /home/logs in Azure
+
+    os.makedirs(log_dir, exist_ok=True)  # Ensure directory exists
+
     dictConfig(
         {
             "version": 1,
@@ -38,7 +44,7 @@ def configure_logging() -> None:
                     "class": "logging.handlers.RotatingFileHandler",
                     "level": "DEBUG",
                     "formatter": "file",
-                    "filename": "elia-api.log",
+                    "filename": f"{log_dir}/elia-api.log",
                     "maxBytes": 1024 * 1024 * 3, # 3MB
                     "backupCount": 3,
                     "encoding": "utf-8",
