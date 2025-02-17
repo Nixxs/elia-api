@@ -47,5 +47,3 @@ app.include_router(account_router)
 async def http_exception_handler_logging(request, exc):
     logger.error(f"HTTPException: {exc.status_code} - {exc.detail}")
     return await http_exception_handler(request, exc)
-
-
