@@ -28,6 +28,10 @@ class GlobalConfig(BaseConfig):
         self.DATABASE_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
+class DevConfig(GlobalConfig):
+    DB_FORCE_ROLL_BACK: bool = True
+
+
 class TestConfig(GlobalConfig):
     TEST_DB_NAME: str = "test-db"
     DB_FORCE_ROLL_BACK: bool = True
@@ -39,8 +43,13 @@ class TestConfig(GlobalConfig):
 
 @lru_cache()
 def get_config(env_state: str):
-    configs = {"test": TestConfig}
-    return configs.get(env_state, GlobalConfig)()
+    match env_state:
+        case "test":
+            return TestConfig()
+        case "dev":
+            return DevConfig()
+        case _:
+            return GlobalConfig()
 
 
 config = get_config(BaseConfig().ENV_STATE)

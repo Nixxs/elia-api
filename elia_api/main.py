@@ -1,11 +1,18 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from asgi_correlation_id import CorrelationIdMiddleware
+from fastapi import FastAPI, HTTPException
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
 
 from elia_api.database import database
 from elia_api.routers.account import router as account_router
 from elia_api.config import config
+from elia_api.logging_conf import configure_logging
+
+logger = logging.getLogger(__name__)
+
 
 # CORS settings
 origins = [
@@ -14,6 +21,8 @@ origins = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging()
+    logger.info("Starting elia-api")
     await database.connect()
     yield
     await database.disconnect()
@@ -29,5 +38,14 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+app.add_middleware(CorrelationIdMiddleware)
+
 # Include routers
 app.include_router(account_router)
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler_logging(request, exc):
+    logger.error(f"HTTPException: {exc.status_code} - {exc.detail}")
+    return await http_exception_handler(request, exc)
+
+
