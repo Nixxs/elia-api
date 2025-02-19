@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
-from elia_api.database import database, metadata, engine
+from elia_api.database import database
 from elia_api.database import user_table
 from elia_api.main import app
 
@@ -29,14 +29,6 @@ async def db() -> AsyncGenerator:
     await database.connect()
     yield
     await database.disconnect()
-
-# resets the database before each test
-@pytest.fixture(autouse=True, scope="function")
-async def reset_database():
-    """Drop and recreate tables before each test function."""
-    async with database.transaction():
-        metadata.drop_all(engine)
-        metadata.create_all(engine)
 
 # allows tests to use the async client
 @pytest.fixture()
