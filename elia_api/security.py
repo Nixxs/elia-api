@@ -1,10 +1,31 @@
 import logging
+import datetime
+from jose import jwt
+from fastapi import HTTPException, status
 from passlib.context import CryptContext
 from elia_api.database import database, user_table
+from elia_api.config import config
+
 
 logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"])
+
+credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail = "Could not validate credentials"
+)
+
+def access_token_expire_minutes() -> int:
+    return 30
+
+def create_access_token(user_id: str):
+    logger.debug("Creating access token", extra={"id": user_id})
+    expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=access_token_expire_minutes())
+    jwt_data = {"sub": user_id, "exp": expire}
+    encoded_jwt = jwt.encode(jwt_data, config.JWT_SECRET, algorithm="HS256")
+
+    return encoded_jwt
 
 
 def get_password_hash(password: str) -> str:
@@ -22,3 +43,12 @@ async def get_user(email: str):
 
     if result:
         return result
+
+async def authenticate_user(email: str, password: str) -> dict:
+    user = await get_user(email)
+    if not user:
+        pass
+    if not verify_password(password, user.password):
+        pass
+
+    return user

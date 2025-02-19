@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from elia_api.database import database, user_table
 from elia_api.models.user import UserIn
-from elia_api.security import get_user, get_password_hash
+from elia_api.security import get_user, get_password_hash, authenticate_user, create_access_token
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,3 +25,9 @@ async def register(user: UserIn):
     await database.execute(query)
 
     return {"detail": "User Created."}
+
+@router.post("/token")
+async def login(user: UserIn):
+    user = await authenticate_user(user.email, user.password)
+    access_token = create_access_token(user.id)
+    return {"access_token": access_token, "token_type": "bearer"}
