@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from elia_api.database import database, metadata, engine
+from elia_api.database import user_table
 from elia_api.main import app
 
 
@@ -45,3 +46,13 @@ async def async_client(client) -> AsyncGenerator:
         base_url=client.base_url,
     ) as ac:
         yield ac
+
+# allows tests to have a user created if they need it
+@pytest.fixture()
+async def registered_user(async_client: AsyncClient) -> dict:
+    user_details = {"email": "test@example.net", "password": "1234"}
+    await async_client.post("/register", json=user_details)
+    query = user_table.select().where(user_table.c.email == user_details["email"])
+    user = await database.fetch_one(query)
+    user_details["id"] = user.id
+    return user_details
