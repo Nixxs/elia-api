@@ -47,8 +47,8 @@ async def get_user(email: str):
 async def authenticate_user(email: str, password: str) -> dict:
     user = await get_user(email)
     if not user:
-        pass
+        raise credentials_exception
     if not verify_password(password, user.password):
-        pass
+        raise credentials_exception
 
     return user
