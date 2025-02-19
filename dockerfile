@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Start the application
-CMD /bin/bash -c "gunicorn --workers 3 --timeout 200 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 'elia_api.main:app'"
+CMD /bin/bash -c "gunicorn --workers 1 --threads 4 --timeout 200 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 'elia_api.main:app'"
