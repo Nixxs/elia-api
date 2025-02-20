@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"])
 
+SECRET_KEY = config.JWT_SECRET
+ALGORITHM = "HS256"
+
 credentials_exception = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail = "Could not validate credentials"
@@ -23,7 +26,7 @@ def create_access_token(user_id: str):
     logger.debug("Creating access token", extra={"id": user_id})
     expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=access_token_expire_minutes())
     jwt_data = {"sub": user_id, "exp": expire}
-    encoded_jwt = jwt.encode(jwt_data, config.JWT_SECRET, algorithm="HS256")
+    encoded_jwt = jwt.encode(jwt_data, SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
 

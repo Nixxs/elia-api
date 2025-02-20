@@ -26,7 +26,7 @@ async def register(user: UserIn):
 
     return {"detail": "User Created."}
 
-@router.post("/token")
+@router.post("/token", status_code=200)
 async def login(user: UserIn):
     user = await authenticate_user(user.email, user.password)
     access_token = create_access_token(user.id)
