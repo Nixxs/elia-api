@@ -1,7 +1,8 @@
 import logging
 import datetime
+from typing import Annotated
 from jose import jwt, ExpiredSignatureError, JWTError
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from elia_api.database import database, user_table
@@ -58,7 +59,7 @@ async def authenticate_user(email: str, password: str) -> dict:
 
     return user
 
-async def get_current_user(token: str):
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     try:
         payload = jwt.decode(token, key=SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")

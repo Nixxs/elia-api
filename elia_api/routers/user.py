@@ -1,10 +1,11 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Depends
 
 from elia_api.database import database, user_table
 from elia_api.models.user import UserIn, User
-from elia_api.security import get_user, get_password_hash, authenticate_user, create_access_token, oauth2_scheme, get_current_user
+from elia_api.security import get_user, get_password_hash, authenticate_user, create_access_token, get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -34,10 +35,8 @@ async def login(user: UserIn):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# protect a route by requireing the token
-# get the user in the route
+# protect a route by requireing the current user
 @router.get("/user", response_model=User, status_code=200)
-async def get_user_by_id(token: str = Depends(oauth2_scheme)):
-    current_user: User = await get_current_user(token)  # noqa
+async def get_user_by_id(current_user: Annotated[User, Depends(get_current_user)]):
     return current_user
 
