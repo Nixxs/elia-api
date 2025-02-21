@@ -1,7 +1,8 @@
 import logging
 import datetime
-from jose import jwt
+from jose import jwt, ExpiredSignatureError, JWTError
 from fastapi import HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from elia_api.database import database, user_table
 from elia_api.config import config
@@ -10,22 +11,23 @@ from elia_api.config import config
 logger = logging.getLogger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"])
-
 SECRET_KEY = config.JWT_SECRET
 ALGORITHM = "HS256"
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 credentials_exception = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail = "Could not validate credentials"
+    detail = "Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"}
 )
 
 def access_token_expire_minutes() -> int:
     return 30
 
-def create_access_token(user_id: str):
-    logger.debug("Creating access token", extra={"id": user_id})
+def create_access_token(email: str):
+    logger.debug("Creating access token", extra={"id": email})
     expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=access_token_expire_minutes())
-    jwt_data = {"sub": user_id, "exp": expire}
+    jwt_data = {"sub": email, "exp": expire}
     encoded_jwt = jwt.encode(jwt_data, SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
@@ -55,3 +57,24 @@ async def authenticate_user(email: str, password: str) -> dict:
         raise credentials_exception
 
     return user
+
+async def get_current_user(token: str):
+    try:
+        payload = jwt.decode(token, key=SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+    except ExpiredSignatureError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"}
+        ) from e
+    except JWTError as e:
+        raise credentials_exception from e
+    
+    user = await get_user(email=email)
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+

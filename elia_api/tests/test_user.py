@@ -39,8 +39,17 @@ async def test_token(async_client: AsyncClient, registered_user: dict):
         "/token",
         json={
             "email":registered_user["email"],
-            "password":registered_user["password"]
+            "password":registered_user["password"]  
         }
     )
     assert response.status_code == 200
     assert response.json()["token_type"] == "bearer"
+
+@pytest.mark.anyio
+async def test_get_user(async_client: AsyncClient, registered_user: dict, logged_in_token: str):
+    response = await async_client.get(
+        "/user",
+        headers={"Authorization": f"Bearer {logged_in_token}"},
+    )
+    user = response.json()
+    assert registered_user["email"] == user["email"]
