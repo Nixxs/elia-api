@@ -12,6 +12,8 @@ from elia_api.routers.chat import router as chat_router
 from elia_api.config import config
 from elia_api.logging_conf import configure_logging
 
+from elia_api.llm import init_gemini
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,6 +26,10 @@ origins = [
 async def lifespan(app: FastAPI):
     configure_logging()
     logger.info("Starting elia-api")
+
+    # Initialize Gemini
+    init_gemini()
+
     await database.connect()
     yield
     await database.disconnect()

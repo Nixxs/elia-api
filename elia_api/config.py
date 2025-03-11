@@ -19,6 +19,7 @@ class GlobalConfig(BaseConfig):
 
     FRONTEND_URL: str
     JWT_SECRET: str
+    GOOGLE_API_KEY: str
 
     DATABASE_URL: str = ""
 
