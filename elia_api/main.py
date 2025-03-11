@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
 
 from elia_api.database import database
 from elia_api.routers.user import router as user_router
+from elia_api.routers.chat import router as chat_router
 from elia_api.config import config
 from elia_api.logging_conf import configure_logging
 
@@ -42,6 +43,7 @@ app.add_middleware(CorrelationIdMiddleware)
 
 # Include routers
 app.include_router(user_router)
+app.include_router(chat_router)
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler_logging(request, exc):
