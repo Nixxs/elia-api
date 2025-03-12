@@ -13,6 +13,16 @@ user_table = sqlalchemy.Table(
     sqlalchemy.Column("password", sqlalchemy.String),
 )
 
+chat_history_table = sqlalchemy.Table(
+    "chat_history",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id"), nullable=False),
+    sqlalchemy.Column("message", sqlalchemy.Text, nullable=False),
+    sqlalchemy.Column("is_user", sqlalchemy.Boolean, nullable=False),
+    sqlalchemy.Column("timestamp", sqlalchemy.DateTime, server_default=sqlalchemy.func.now(), nullable=False),
+)
+
 DATABASE_URL = config.DATABASE_URL
 DB_FORCE_ROLL_BACK = config.DB_FORCE_ROLL_BACK
 
