@@ -1,5 +1,6 @@
 import logging
 from typing import Annotated, Union, List
+from elia_api.config import config
 
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -13,10 +14,11 @@ from elia_api.tools import tools
 
 from elia_api.database import database, chat_history_table
 
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-async def limit_chat_history(user_id: int, limit: int = 100):
+async def limit_chat_history(user_id: int, limit: int = config.CHAT_HISTORY_LIMIT):
     query = """
         DELETE FROM chat_history
         WHERE id IN (
@@ -67,8 +69,7 @@ async def chat_with_function_call(
     prompt: Prompt
 ):
     user_id = current_user.id
-    email = current_user.email
-    logger.info(f"User {email} sent prompt: {prompt.message}")
+    logger.info(f"User ID {user_id} sent prompt: {prompt.message}")
 
     # Store user message
     await database.execute(
@@ -81,8 +82,7 @@ async def chat_with_function_call(
 
     try:
         final_prompt = await assemble_context(user_id, prompt.message, limit=10)
-        logger.info(f"final prompt: {final_prompt}")
-        model = genai.GenerativeModel('gemini-1.5-pro-latest')
+        model = genai.GenerativeModel(config.GOOGLE_LLM_MODEL)
 
         response = model.generate_content(
             contents=final_prompt,
@@ -100,7 +100,6 @@ async def chat_with_function_call(
                     function_name = function_call.name
                     arguments = dict(function_call.args)
 
-                    
                     func_call_summary = f"Function Call: {function_name} with args {arguments}"
                     await database.execute(
                         chat_history_table.insert().values(
@@ -141,7 +140,7 @@ async def chat_with_function_call(
                     )
                     await limit_chat_history(user_id)
 
-                    logger.info(f"Chat Response: {part.text}")
+                    logger.info(f"Chat Response to User ID {user_id}: {part.text}")
                     return ChatResponse(message=part.text)
                 
         # No content case
