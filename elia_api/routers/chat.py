@@ -28,7 +28,7 @@ async def limit_chat_history(user_id: int, limit: int = config.CHAT_HISTORY_LIMI
             OFFSET :limit
         )
     """
-    await database.execute(query, {"user_id": user_id, "limit": 1})
+    await database.execute(query, {"user_id": user_id, "limit": limit})
 
 async def get_chat_history(user_id: int, limit: int = 10):
     query = chat_history_table.select().where(
@@ -118,7 +118,8 @@ async def chat_with_function_call(
 
                     # Handle frontend-only functions (like add_marker)
                     await limit_chat_history(user_id)
-                    return FunctionCall(name=function_name, arguments=arguments)
+                    func_call_summary = f"Function Call: {function_name} with args {arguments}"
+                    return FunctionCall(name=function_name, arguments=arguments, message=func_call_summary)
 
                 # Handle plain chat message
                 elif part.text:

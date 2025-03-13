@@ -13,3 +13,4 @@ class FunctionCall(BaseModel):
     response_type: str = "function_call"
     name: str
     arguments: Dict[str, Any]
+    message: str
