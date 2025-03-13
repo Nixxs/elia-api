@@ -28,7 +28,7 @@ async def limit_chat_history(user_id: int, limit: int = config.CHAT_HISTORY_LIMI
             OFFSET :limit
         )
     """
-    await database.execute(query, {"user_id": user_id, "limit": limit})
+    await database.execute(query, {"user_id": user_id, "limit": 1})
 
 async def get_chat_history(user_id: int, limit: int = 10):
     query = chat_history_table.select().where(
@@ -99,15 +99,6 @@ async def chat_with_function_call(
                     function_call = part.function_call
                     function_name = function_call.name
                     arguments = dict(function_call.args)
-
-                    func_call_summary = f"Function Call: {function_name} with args {arguments}"
-                    await database.execute(
-                        chat_history_table.insert().values(
-                            user_id=user_id,
-                            message=func_call_summary,
-                            is_user=False
-                        )
-                    )
 
                     # Handle backend-registered functions (like get_weather)
                     if function_name in BACKEND_FUNCTION_REGISTRY:
