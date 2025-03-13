@@ -100,15 +100,6 @@ async def chat_with_function_call(
                     function_name = function_call.name
                     arguments = dict(function_call.args)
 
-                    func_call_summary = f"Function Call: {function_name} with args {arguments}"
-                    await database.execute(
-                        chat_history_table.insert().values(
-                            user_id=user_id,
-                            message=func_call_summary,
-                            is_user=False
-                        )
-                    )
-
                     # Handle backend-registered functions (like get_weather)
                     if function_name in BACKEND_FUNCTION_REGISTRY:
                         result = BACKEND_FUNCTION_REGISTRY[function_name](**arguments)
@@ -127,7 +118,8 @@ async def chat_with_function_call(
 
                     # Handle frontend-only functions (like add_marker)
                     await limit_chat_history(user_id)
-                    return FunctionCall(name=function_name, arguments=arguments)
+                    func_call_summary = f"Function Call: {function_name} with args {arguments}"
+                    return FunctionCall(name=function_name, arguments=arguments, message=func_call_summary)
 
                 # Handle plain chat message
                 elif part.text:
