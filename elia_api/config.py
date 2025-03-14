@@ -19,9 +19,13 @@ class GlobalConfig(BaseConfig):
 
     FRONTEND_URL: str
     JWT_SECRET: str
+
     GOOGLE_API_KEY: str
     CHAT_HISTORY_LIMIT: int
     GOOGLE_LLM_MODEL: str
+
+    GEOFLIP_API_KEY: str
+    GEOFLIP_API_URL: str
 
     DATABASE_URL: str = ""
 

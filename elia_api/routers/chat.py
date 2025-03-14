@@ -174,6 +174,8 @@ async def chat_with_function_call(
 
                 # backend function call
                 if function_name in BACKEND_FUNCTION_REGISTRY:
+                    arguments["map_data"] = prompt.map_data
+
                     # Backend function
                     result = BACKEND_FUNCTION_REGISTRY[function_name](**arguments)
 
