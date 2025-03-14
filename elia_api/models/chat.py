@@ -8,6 +8,7 @@ class ChatResponse(BaseModel):
 
 class Prompt(BaseModel):
     message: str
+    map_data: str
 
 class FunctionCall(BaseModel):
     response_type: str = "function_call"
