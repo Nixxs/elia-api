@@ -1,4 +1,5 @@
 import logging
+import json
 from typing import Annotated, Union, List
 from elia_api.config import config
 
@@ -53,13 +54,41 @@ def format_content(role: str, message: str):
         "parts": [{"text": message}]
     }
 
+
 async def assemble_context(user_id: int, new_prompt: str, limit: int = 10):
     history = await get_chat_history(user_id, limit=limit)
     context = []
+
     for row in history:
-        role = "user" if row["is_user"] else "model"
-        context.append(format_content(role, row["message"]))
-    # Add the latest user message
+        match row["role"]:
+            case "user":
+                context.append(format_content("user", row["message"]))
+
+            case "function":
+                # Gemini doesn't accept 'function' role, map to 'model'
+                context.append(format_content("model", row["message"]))
+
+            case "model":
+                # Check if it's a function call or plain text
+                try:
+                    parsed = json.loads(row["message"])
+                    if "name" in parsed and "args" in parsed:
+                        # It's a function call
+                        context.append({
+                            "role": "model",
+                            "parts": [{"function_call": parsed}]
+                        })
+                    else:
+                        # Regular model message
+                        context.append(format_content("model", row["message"]))
+                except json.JSONDecodeError:
+                    # Regular model message if not JSON
+                    context.append(format_content("model", row["message"]))
+
+            case _:
+                print(f"Unknown role '{row['role']}' in chat history, skipping...")
+
+    # Add latest user message
     context.append(format_content("user", new_prompt))
     return context
 
@@ -76,7 +105,7 @@ async def chat_with_function_call(
         chat_history_table.insert().values(
             user_id=user_id,
             message=prompt.message,
-            is_user=True
+            role="user"
         )
     )
 
@@ -109,7 +138,7 @@ async def chat_with_function_call(
                             chat_history_table.insert().values(
                                 user_id=user_id,
                                 message=result_summary,
-                                is_user=False
+                                role="model"
                             )
                         )
 
@@ -127,7 +156,7 @@ async def chat_with_function_call(
                         chat_history_table.insert().values(
                             user_id=user_id,
                             message=part.text,
-                            is_user=False
+                            role="model"
                         )
                     )
                     await limit_chat_history(user_id)
@@ -140,7 +169,7 @@ async def chat_with_function_call(
             chat_history_table.insert().values(
                 user_id=user_id,
                 message="No content returned.",
-                is_user=False
+                role="model"
             )
         )
         await limit_chat_history(user_id)
@@ -153,4 +182,19 @@ async def chat_with_function_call(
 @router.get("/chat/history", response_model=List[str])
 async def get_history(current_user: Annotated[User, Depends(get_current_user)]):
     history = await get_chat_history(current_user.id, limit=100)
-    return [f"{'User' if h['is_user'] else 'Assistant'}: {h['message']}" for h in history]
+
+    readable_history = []
+    for h in history:
+        # Map role to readable name
+        if h["role"] == "user":
+            speaker = "User"
+        elif h["role"] == "model":
+            speaker = "Assistant"
+        elif h["role"] == "function":
+            speaker = "Function Result"
+        else:
+            speaker = "Unknown"
+
+        readable_history.append(f"{speaker}: {h['message']}")
+
+    return readable_history
