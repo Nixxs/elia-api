@@ -7,6 +7,6 @@ logger = logging.getLogger(__name__)
 # Function to initialize Gemini
 def init_gemini():
     if not config.GOOGLE_API_KEY:
-        raise RuntimeError("❌ GOOGLE_API_KEY is missing in config.")
+        raise RuntimeError("GOOGLE_API_KEY is missing in config.")
     genai.configure(api_key=config.GOOGLE_API_KEY)
-    logger.info("✅ Gemini API initialized.")
+    logger.info("Gemini API initialized.")

@@ -86,6 +86,10 @@ This project is a stepping stone toward smarter geospatial tools, showcasing the
     DB_PASSWORD=pa55word
 
     FRONTEND_URL=http://127.0.0.1:8080
+    JWT_SECRET=somekindofsupersecretsecret
+    GOOGLE_API_KEY=thisisobiouslyyourownapikeymakesureitsgotgeminiapi
+    GOOGLE_LLM_MODEL=gemini-1.5-pro-001
+    CHAT_HISTORY_LIMIT=100
     ```
 - setup python virtual environment
     - `python -m venv .venv`

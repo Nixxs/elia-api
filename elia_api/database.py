@@ -18,8 +18,8 @@ chat_history_table = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("user_id", sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id"), nullable=False),
-    sqlalchemy.Column("message", sqlalchemy.Text, nullable=False),
-    sqlalchemy.Column("is_user", sqlalchemy.Boolean, nullable=False),
+    sqlalchemy.Column("role", sqlalchemy.String, nullable=False),  # "user", "model", "function"
+    sqlalchemy.Column("message", sqlalchemy.Text, nullable=False),  # Can be plain text or JSON
     sqlalchemy.Column("timestamp", sqlalchemy.DateTime, server_default=sqlalchemy.func.now(), nullable=False),
 )
 
