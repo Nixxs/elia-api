@@ -5,6 +5,8 @@ from geojson import Feature, Point, FeatureCollection
 import json
 from typing import Dict, Any
 
+# NOTE: when you are making functions, just remember the LLM doesn't seem to like complex data structures as params
+
 @register_backend_function("buffer_features")
 def buffer_features(distance: float, units: str, map_data: str ):
     """
@@ -20,7 +22,7 @@ def buffer_features(distance: float, units: str, map_data: str ):
         map_data: Current map data this is provided automatically
 
     Returns:
-        A dictionary containing the buffered GeoJSON FeatureCollection under the key "geojson".
+        A he buffered GeoJSON FeatureCollection under the key "geojson" as a string so you can call update_map_data to update the map for the user.
         If no spatial data is provided, or if an error occurs, returns an error message.
 
     Example:
@@ -32,11 +34,20 @@ def buffer_features(distance: float, units: str, map_data: str ):
         - The output is always returned in GeoJSON format (EPSG:4326).
         - This function is intended to be called by the AI assistant to perform geoprocessing operations.
     """
+
+    try:
+        # Parse map_data from string to dict
+        input_geojson = json.loads(map_data)
+    except json.JSONDecodeError:
+        return {
+            "error": "Invalid map_data format. Expected valid GeoJSON FeatureCollection as JSON string."
+        }
+
     # Prepare Geoflip API payload
     geoflip_payload = {
-        "input_geojson": map_data,
+        "input_geojson": input_geojson,
         "output_format": "geojson",
-        "output_crs": "EPSG:4326",  # Assuming output should stay in WGS84
+        "output_crs": "EPSG:4326",
         "transformations": [
             {
                 "type": "buffer",
@@ -51,13 +62,13 @@ def buffer_features(distance: float, units: str, map_data: str ):
         response = requests.post(
             f"{config.GEOFLIP_API_URL}/v1/transform/geojson",
             json=geoflip_payload,
-            headers={"Authorization": f"Bearer {config.GEOFLIP_API_KEY}"}
+            headers={"apiKey": config.GEOFLIP_API_KEY}
         )
 
         # Handle response
         if response.status_code == 200:
             buffered_geojson = response.json()
-            return {"geojson": buffered_geojson}
+            return {"geojson": json.dumps(buffered_geojson)}
         else:
             return {
                 "error": "Failed to buffer data via Geoflip API.",
@@ -67,6 +78,77 @@ def buffer_features(distance: float, units: str, map_data: str ):
 
     except requests.RequestException as e:
         return {"error": "Request to Geoflip API failed.", "details": str(e)}
+
+@register_backend_function("union_features")
+def union_features(map_data: str):
+    """
+    Union spatial features into a single combined geometry.
+
+    This function takes spatial data currently displayed on the map (as GeoJSON) and performs
+    a union operation to merge overlapping or touching geometries into a single geometry.
+    It uses the Geoflip API to perform the union and returns the resulting GeoJSON FeatureCollection.
+    you will probably need to call the update_map_data after doing this to the user's map reflects the change
+    unless you need to follow up with something else
+
+    Args:
+        map_data: Current map data provided automatically (GeoJSON FeatureCollection as a JSON string).
+
+    Returns:
+        A GeoJSON FeatureCollection under the key "geojson" as a string so you can call update_map_data to update the map for the user.
+        If no spatial data is provided, or if an error occurs, returns an error message.
+
+    Example:
+        union_features(map_state={...})
+
+    Notes:
+        - The `map_data` argument is supplied automatically by the system.
+        - You (the AI) do not need to ask the user for this value.
+        - The output is always returned in GeoJSON format (EPSG:4326).
+        - This function is intended to be called by the AI assistant to perform geoprocessing operations.
+    """
+
+    try:
+        # Parse map_data from string to dict
+        input_geojson = json.loads(map_data)
+    except json.JSONDecodeError:
+        return {
+            "error": "Invalid map_data format. Expected valid GeoJSON FeatureCollection as JSON string."
+        }
+
+    # Prepare Geoflip API payload
+    geoflip_payload = {
+        "input_geojson": input_geojson,
+        "output_format": "geojson",
+        "output_crs": "EPSG:4326",
+        "transformations": [
+            {
+                "type": "union"
+            }
+        ]
+    }
+
+    try:
+        # Make request to Geoflip API
+        response = requests.post(
+            f"{config.GEOFLIP_API_URL}/v1/transform/geojson",
+            json=geoflip_payload,
+            headers={"apiKey": config.GEOFLIP_API_KEY}
+        )
+
+        # Handle response
+        if response.status_code == 200:
+            unioned_geojson = response.json()
+            return {"geojson": json.dumps(unioned_geojson)}
+        else:
+            return {
+                "error": "Failed to union data via Geoflip API.",
+                "status_code": response.status_code,
+                "details": response.text
+            }
+
+    except requests.RequestException as e:
+        return {"error": "Request to Geoflip API failed.", "details": str(e)}
+
 
 @register_backend_function("lat_long_to_geojson")
 def lat_long_to_geojson(latitude: float, longitude: float, label: str, map_data: str) -> Dict[str, Any]:
