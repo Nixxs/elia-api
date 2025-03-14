@@ -42,11 +42,11 @@ async def get_chat_history(user_id: int, limit: int = 10):
 
 def summarise_result(result, function_name):
     if isinstance(result, dict) and "features" in result:
-        return f"Function Call: {function_name} -> [GeoJSON with {len(result['features'])} features omitted]"
+        return f"Run Tool: {function_name} -> [GeoJSON with {len(result['features'])} features omitted]"
     elif isinstance(result, str) and len(result) > 500:
-        return f"Function Call: {function_name} -> [Large response omitted, length={len(result)}]"
+        return f"Run Tool: {function_name} -> [Large response omitted, length={len(result)}]"
     else:
-        return f"Function Call: {function_name} -> {str(result)[:500]}"  # Trim long responses
+        return f"Run Tool: {function_name} -> {str(result)[:500]}"  # Trim long responses
 
 def format_content(role: str, message: str):
     return {
@@ -92,14 +92,30 @@ async def assemble_context(user_id: int, limit: int = 10):
             case _:
                 print(f"Unknown role '{row['role']}' in chat history, skipping...")
 
-    # If last message is a natural text response, remove all prior dangling function_responses/calls
-    for i in reversed(range(len(context))):
-        if "function_response" in context[i]["parts"][0] or "function_call" in context[i]["parts"][0]:
-            continue  # Ok to keep
-        elif "text" in context[i]["parts"][0]:  # Natural text
-            return context[i:]  # Trim everything before this natural text
+    # Walk backwards to find the earliest valid entry point
+    # gemini needs to have a function_call > function_response > text order if you stuff that it won't work
+    # so this trim is necessary so that we are sending valid context to the context window
+    trim_index = 0  # Start of trimmed context
 
-    return context
+    for i in range(len(context)):
+        part = context[i]["parts"][0]
+
+        # If we find a user message -> valid conversation start
+        if context[i]["role"] == "user":
+            trim_index = i
+            break  # Stop trimming here
+
+        # If we find a natural text response from model, also a safe start
+        if "text" in part:
+            trim_index = i
+            break  # Stop trimming here
+
+        # Otherwise, keep trimming until we find something valid
+
+    # Now return trimmed context
+    trimmed_context = context[trim_index:]
+
+    return trimmed_context
 
 @router.post("/chat", response_model=Union[ChatResponse, FunctionCall], status_code=200)
 async def chat_with_function_call(
@@ -177,6 +193,7 @@ async def chat_with_function_call(
 
                 # front end function call
                 else:
+                    front_end_function_result = {"output": "front end function executed"}
                     # Store simulated function response (for frontend)
                     await database.execute(
                         chat_history_table.insert().values(
@@ -185,7 +202,7 @@ async def chat_with_function_call(
                                 "function_response": {
                                     "name": function_name,
                                     "response": {
-                                        "output": "front end function executed"
+                                        "output": front_end_function_result
                                     }
                                 }
                             }),
@@ -233,7 +250,7 @@ async def chat_with_function_call(
             )
         )
         await limit_chat_history(user_id)
-        return ChatResponse(message="No content returned.")
+        return ChatResponse(message="Something went wrong with the LLM, no content returned.")
 
     except Exception as e:
         logger.error(f"Gemini API error: {e}", exc_info=True)
