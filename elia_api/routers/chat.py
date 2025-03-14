@@ -54,8 +54,7 @@ def format_content(role: str, message: str):
         "parts": [{"text": message}]
     }
 
-
-async def assemble_context(user_id: int, new_prompt: str, limit: int = 10):
+async def assemble_context(user_id: int, limit: int = 10):
     history = await get_chat_history(user_id, limit=limit)
     context = []
 
@@ -64,32 +63,42 @@ async def assemble_context(user_id: int, new_prompt: str, limit: int = 10):
             case "user":
                 context.append(format_content("user", row["message"]))
 
-            case "function":
-                # Gemini doesn't accept 'function' role, map to 'model'
-                context.append(format_content("model", row["message"]))
-
             case "model":
-                # Check if it's a function call or plain text
                 try:
                     parsed = json.loads(row["message"])
-                    if "name" in parsed and "args" in parsed:
+
+                    if "function_response" in parsed:
+                        # It's a function response
+                        context.append({
+                            "role": "model",
+                            "parts": [{"function_response": parsed["function_response"]}]
+                        })
+
+                    elif "name" in parsed and "args" in parsed:
                         # It's a function call
                         context.append({
                             "role": "model",
                             "parts": [{"function_call": parsed}]
                         })
+
                     else:
-                        # Regular model message
+                        # Regular model text message
                         context.append(format_content("model", row["message"]))
+
                 except json.JSONDecodeError:
-                    # Regular model message if not JSON
+                    # Fallback: plain model message
                     context.append(format_content("model", row["message"]))
 
             case _:
                 print(f"Unknown role '{row['role']}' in chat history, skipping...")
 
-    # Add latest user message
-    context.append(format_content("user", new_prompt))
+    # If last message is a natural text response, remove all prior dangling function_responses/calls
+    for i in reversed(range(len(context))):
+        if "function_response" in context[i]["parts"][0] or "function_call" in context[i]["parts"][0]:
+            continue  # Ok to keep
+        elif "text" in context[i]["parts"][0]:  # Natural text
+            return context[i:]  # Trim everything before this natural text
+
     return context
 
 @router.post("/chat", response_model=Union[ChatResponse, FunctionCall], status_code=200)
@@ -110,61 +119,112 @@ async def chat_with_function_call(
     )
 
     try:
-        final_prompt = await assemble_context(user_id, prompt.message, limit=10)
         model = genai.GenerativeModel(config.GOOGLE_LLM_MODEL)
+        final_text_response = None
 
-        response = model.generate_content(
-            contents=final_prompt,
-            tools=tools,  # List of callable tools
-        )
+        while True:  # Loop allows Gemini to call multiple functions IF IT DECIDES to
+            # Assemble latest context including function calls/results
+            final_prompt = await assemble_context(user_id, limit=10)
 
-        candidates = response.candidates or []
-        if candidates:
+            response = model.generate_content(
+                contents=final_prompt,
+                tools=tools,  # Callable tools
+            )
+
+            candidates = response.candidates or []
+            if not candidates:
+                break  # Nothing to process, exit loop
+
             parts = candidates[0].content.parts or []
-            if parts:
-                part = parts[0]
-                # Handle function call
-                if part.function_call:
-                    function_call = part.function_call
-                    function_name = function_call.name
-                    arguments = dict(function_call.args)
+            if not parts:
+                break  # No content parts, exit loop
 
-                    # Handle backend-registered functions (like get_weather)
-                    if function_name in BACKEND_FUNCTION_REGISTRY:
-                        result = BACKEND_FUNCTION_REGISTRY[function_name](**arguments)
+            part = parts[0]
 
-                        result_summary = summarise_result(result, function_name)
-                        await database.execute(
-                            chat_history_table.insert().values(
-                                user_id=user_id,
-                                message=result_summary,
-                                role="model"
-                            )
-                        )
+            # CASE 1: LLM wants to call a function (backend or frontend)
+            if part.function_call:
+                function_call = part.function_call
+                function_name = function_call.name
+                arguments = dict(function_call.args)
 
-                        await limit_chat_history(user_id)
-                        return ChatResponse(message=str(result))  # Return as chat message
+                # 1. Store function call
+                await database.execute(
+                    chat_history_table.insert().values(
+                        user_id=user_id,
+                        message=json.dumps({"name": function_name, "args": arguments}),
+                        role="model"
+                    )
+                )
 
-                    # Handle frontend-only functions (like add_marker)
-                    await limit_chat_history(user_id)
-                    func_call_summary = f"Function Call: {function_name} with args {arguments}"
-                    return FunctionCall(name=function_name, arguments=arguments, message=func_call_summary)
+                # backend function call
+                if function_name in BACKEND_FUNCTION_REGISTRY:
+                    # Backend function
+                    result = BACKEND_FUNCTION_REGISTRY[function_name](**arguments)
 
-                # Handle plain chat message
-                elif part.text:
+                    # Store function result as function_response
                     await database.execute(
                         chat_history_table.insert().values(
                             user_id=user_id,
-                            message=part.text,
+                            message=json.dumps({
+                                "function_response": {
+                                    "name": function_name,
+                                    "response": result
+                                }
+                            }),
                             role="model"
                         )
                     )
-                    await limit_chat_history(user_id)
 
-                    logger.info(f"Chat Response to User ID {user_id}: {part.text}")
-                    return ChatResponse(message=part.text)
-                
-        # No content case
+                # front end function call
+                else:
+                    # Store simulated function response (for frontend)
+                    await database.execute(
+                        chat_history_table.insert().values(
+                            user_id=user_id,
+                            message=json.dumps({
+                                "function_response": {
+                                    "name": function_name,
+                                    "response": {
+                                        "output": "front end function executed"
+                                    }
+                                }
+                            }),
+                            role="model"
+                        )
+                    )
+
+                    await limit_chat_history(user_id)
+                    # RETURN function call for frontend to execute
+                    return FunctionCall(
+                        name=function_name,
+                        arguments=arguments,
+                        message="Function call ready for frontend execution."
+                    )
+
+                await limit_chat_history(user_id)
+                continue  # Go back to Gemini to "think" — but flag will now block more function calls until text reply
+
+            # CASE 2: LLM responds with final plain chat message (no function call)
+            elif part.text:
+                # Store message
+                await database.execute(
+                    chat_history_table.insert().values(
+                        user_id=user_id,
+                        message=part.text,
+                        role="model"
+                    )
+                )
+                await limit_chat_history(user_id)
+                logger.info(f"Final chat response to user {user_id}: {part.text}")
+
+                final_text_response = part.text
+                break  # Exit loop gracefully
+
+        # After the while loop ends
+        if final_text_response:
+            return ChatResponse(message=final_text_response)
+
+        # Fallback: No useful content
         await database.execute(
             chat_history_table.insert().values(
                 user_id=user_id,
