@@ -115,6 +115,10 @@ async def assemble_context(user_id: int, limit: int = 10):
     # Now return trimmed context
     trimmed_context = context[trim_index:]
 
+    print("-------------------------")
+    [print(event) for event in context]
+    print("-------------------------")
+
     return trimmed_context
 
 @router.post("/chat", response_model=Union[ChatResponse, FunctionCall], status_code=200)
@@ -140,7 +144,7 @@ async def chat_with_function_call(
 
         while True:  # Loop allows Gemini to call multiple functions IF IT DECIDES to
             # Assemble latest context including function calls/results
-            final_prompt = await assemble_context(user_id, limit=10)
+            final_prompt = await assemble_context(user_id, limit=30)
 
             response = model.generate_content(
                 contents=final_prompt,
@@ -163,6 +167,8 @@ async def chat_with_function_call(
                 function_name = function_call.name
                 arguments = dict(function_call.args)
 
+                logger.info(f"function call requested: {function_name} args: {arguments}")
+
                 # 1. Store function call
                 await database.execute(
                     chat_history_table.insert().values(
@@ -177,8 +183,10 @@ async def chat_with_function_call(
                     arguments["map_data"] = prompt.map_data
 
                     # Backend function
+                    logger.info(f"executing backend function: {function_name}")
                     result = BACKEND_FUNCTION_REGISTRY[function_name](**arguments)
 
+                    logger.info(f"{function_name} returned: {result}")
                     # Store function result as function_response
                     await database.execute(
                         chat_history_table.insert().values(
@@ -196,6 +204,8 @@ async def chat_with_function_call(
                 # front end function call
                 else:
                     front_end_function_result = {"output": "front end function executed"}
+
+                    logger.info(f"requesting front end function call: {function_name}")
                     # Store simulated function response (for frontend)
                     await database.execute(
                         chat_history_table.insert().values(
@@ -217,7 +227,7 @@ async def chat_with_function_call(
                     return FunctionCall(
                         name=function_name,
                         arguments=arguments,
-                        message="Function call ready for frontend execution."
+                        message="I've updated the map for you."
                     )
 
                 await limit_chat_history(user_id)

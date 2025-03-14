@@ -1,6 +1,9 @@
 import requests
 from elia_api.tools.registry import register_backend_function
 from elia_api.config import config
+from geojson import Feature, Point, FeatureCollection
+import json
+from typing import Dict, Any
 
 @register_backend_function("buffer_features")
 def buffer_features(distance: float, units: str, map_data: str ):
@@ -64,3 +67,37 @@ def buffer_features(distance: float, units: str, map_data: str ):
 
     except requests.RequestException as e:
         return {"error": "Request to Geoflip API failed.", "details": str(e)}
+
+@register_backend_function("lat_long_to_geojson")
+def lat_long_to_geojson(latitude: float, longitude: float, label: str, map_data: str) -> Dict[str, Any]:
+    """
+    Convert latitude and longitude into a GeoJSON FeatureCollection, 
+    wrapping a Point geometry in a FeatureCollection to maintain 
+    consistent structure expected by the frontend. Use this when you have only a point
+    and want to call the update_map_data
+
+    Args:
+        latitude: Latitude of the point.
+        longitude: Longitude of the point.
+        map_data: Current map data this is provided automatically
+
+    Returns:
+        A dictionary containing a GeoJSON FeatureCollection as a string.
+    """
+    # Create a GeoJSON Point Feature
+    point_feature = Feature(
+        geometry=Point((longitude, latitude)),
+        properties={
+            "label": label
+        }  # Add properties if needed
+    )
+
+    # Wrap the feature in a FeatureCollection
+    feature_collection = FeatureCollection([point_feature])
+
+    # Convert FeatureCollection to JSON string for frontend compatibility
+    geojson_str = json.dumps(feature_collection)
+
+    return {
+        "geojson": geojson_str
+    }
