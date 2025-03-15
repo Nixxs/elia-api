@@ -16,3 +16,4 @@ google.generativeai
 geojson
 google-cloud-bigquery
 google-auth
+shapely
