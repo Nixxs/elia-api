@@ -70,3 +70,7 @@ htmlcov/
 
 # Windows
 Thumbs.db
+
+#keys
+keys/
+*.json

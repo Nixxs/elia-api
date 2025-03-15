@@ -205,6 +205,28 @@ async def chat_with_function_call(
                 else:
                     front_end_function_result = {"output": "front end function executed"}
 
+                    # Check if the response includes 'geojson' and parse it
+                    if "geojson" in arguments:
+                        raw_geojson = arguments["geojson"].strip()
+                        
+                        # Debug log to inspect
+                        logger.info(f"Raw geojson argument before fix: {raw_geojson}")
+
+                        # Temporary patch to fix double closing braces
+                        while raw_geojson.endswith("}"):
+                            try:
+                                # Try parsing
+                                parsed_geojson = json.loads(raw_geojson)
+                                arguments["geojson"] = parsed_geojson
+                                logger.info("Successfully parsed geojson after fix.")
+                                break
+                            except json.JSONDecodeError:
+                                # Strip last closing brace and try again
+                                raw_geojson = raw_geojson[:-1]
+                        else:
+                            logger.error("Invalid GeoJSON format passed to frontend after attempting fix.")
+                            raise HTTPException(status_code=400, detail="Invalid GeoJSON format.")
+                    
                     logger.info(f"requesting front end function call: {function_name}")
                     # Store simulated function response (for frontend)
                     await database.execute(

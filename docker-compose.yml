@@ -27,6 +27,12 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - FRONTEND_URL=${FRONTEND_URL}
       - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - BIGQUERY_JSON_KEY_B64=${BIGQUERY_JSON_KEY_B64}
+      - GOOGLE_LLM_MODEL=${GOOGLE_LLM_MODEL}
+      - CHAT_HISTORY_LIMIT=${CHAT_HISTORY_LIMIT}
+      - GEOFLIP_API_KEY=${GEOFLIP_API_KEY}
+      - GEOFLIP_API_URL=${GEOFLIP_API_URL}
     depends_on:
       db:
         condition: service_started

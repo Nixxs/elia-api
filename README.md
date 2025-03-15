@@ -88,6 +88,7 @@ This project is a stepping stone toward smarter geospatial tools, showcasing the
     FRONTEND_URL=http://127.0.0.1:8080
     JWT_SECRET=somekindofsupersecretsecret
     GOOGLE_API_KEY=thisisobiouslyyourownapikeymakesureitsgotgeminiapi
+    BIGQUERY_JSON_KEY_B64=base64 encoded string of the google service account .json
     GOOGLE_LLM_MODEL=gemini-1.5-pro-001
     CHAT_HISTORY_LIMIT=100
     ```

@@ -14,3 +14,5 @@ python-multipart
 passlib[bcrypt]
 google.generativeai
 geojson
+google-cloud-bigquery
+google-auth
