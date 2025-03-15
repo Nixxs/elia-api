@@ -6,6 +6,7 @@ import json
 from typing import Dict, Any
 from shapely import wkt
 from shapely.geometry import mapping
+from elia_api.utils.database_ops import store_geometry
 
 # NOTE: when you are making functions, just remember the LLM doesn't seem to like complex data structures as params
 
@@ -152,21 +153,33 @@ def union_features(map_data: str):
         return {"error": "Request to Geoflip API failed.", "details": str(e)}
 
 @register_backend_function("lat_long_to_geojson")
-def lat_long_to_geojson(latitude: float, longitude: float, label: str, map_data: str) -> Dict[str, Any]:
+async def lat_long_to_geojson(latitude: float, longitude: float, label: str, user_id: int = None) -> Dict[str, Any]:
     """
-    Convert latitude and longitude into a GeoJSON FeatureCollection as a string for map updates.
+    Create a point feature from latitude and longitude, and store it as a geometry for later use.
+
+    This function generates a GeoJSON point using the provided latitude, longitude, and label, stores it in the geometry database, and returns a 'geometry_id' for future reference.
+
+    The 'geometry_id' is used to reference spatial data in other operations (e.g., buffer, union) without handling raw GeoJSON.
 
     Args:
         latitude: Latitude of the point.
         longitude: Longitude of the point.
-        label: A label to add as a property to the feature.
-        map_data: Current map data (provided automatically).
+        label: A label to store as a property.
+        user_id: [Provided automatically] Used to link geometry to the user.
 
     Returns:
-        A dictionary containing a GeoJSON FeatureCollection as a string.
+        A dictionary with:
+            - geometry_id: ID of the stored geometry.
+
+    Example:
+        lat_long_to_geojson(latitude=-31.9505, longitude=115.8605, label="Perth City")
+
+    Notes:
+        - Always use the returned 'geometry_id' to reference this geometry in future operations.
+        - This does not update the map — use 'update_map_data' if needed.
     """
 
-    # GeoJSON dict (manually)
+    # GeoJSON FeatureCollection structure
     feature_collection = {
         "type": "FeatureCollection",
         "features": [
@@ -174,7 +187,7 @@ def lat_long_to_geojson(latitude: float, longitude: float, label: str, map_data:
                 "type": "Feature",
                 "geometry": {
                     "type": "Point",
-                    "coordinates": [longitude, latitude]  # Note: [lon, lat] order for GeoJSON
+                    "coordinates": [longitude, latitude]  # [lon, lat] as per GeoJSON standard
                 },
                 "properties": {
                     "label": label
@@ -183,13 +196,12 @@ def lat_long_to_geojson(latitude: float, longitude: float, label: str, map_data:
         ]
     }
 
-    # Proper JSON string (compact, no line breaks)
-    geojson_str = json.dumps(feature_collection, separators=(",", ":"))
+    # Store in geometries table and return the geometry ID
+    geometry_id = await store_geometry(feature_collection, user_id=user_id)
 
     return {
-        "geojson": geojson_str
+        "geometry_id": geometry_id
     }
-
 
 
 @register_backend_function("wkt_to_geojson")
