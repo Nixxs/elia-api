@@ -1,5 +1,6 @@
 import logging
 import json
+import inspect
 from typing import Annotated, Union, List
 from elia_api.config import config
 
@@ -14,6 +15,7 @@ from elia_api.tools.registry import BACKEND_FUNCTION_REGISTRY
 from elia_api.tools import tools
 
 from elia_api.database import database, chat_history_table
+from elia_api.tools import update_map_data
 
 
 router = APIRouter()
@@ -178,13 +180,21 @@ async def chat_with_function_call(
                     )
                 )
 
-                # backend function call
                 if function_name in BACKEND_FUNCTION_REGISTRY:
-                    arguments["map_data"] = prompt.map_data
+                    func = BACKEND_FUNCTION_REGISTRY[function_name]
+                    func_params = inspect.signature(func).parameters
 
-                    # Backend function
+                    # Add map_data only if required
+                    if "map_data" in func_params:
+                        arguments["map_data"] = prompt.map_data
+
+                    # Add user_id only if required
+                    if "user_id" in func_params:
+                        arguments["user_id"] = user_id
+
+                    # Execute backend function
                     logger.info(f"executing backend function: {function_name}")
-                    result = BACKEND_FUNCTION_REGISTRY[function_name](**arguments)
+                    result = await func(**arguments) if inspect.iscoroutinefunction(func) else func(**arguments)
 
                     logger.info(f"{function_name} returned: {result}")
                     # Store function result as function_response
@@ -203,31 +213,14 @@ async def chat_with_function_call(
 
                 # front end function call
                 else:
-                    front_end_function_result = {"output": "front end function executed"}
+                    front_end_arguments = ""
+                    if function_name == "update_map_data":
+                        front_end_arguments = await update_map_data(arguments["geometry_id"], arguments["type"])
+                    else:
+                        logger.error(f"Front end fucntion not found: {function_name}", exc_info=True)
+                        raise HTTPException(status_code=500, detail=f"Front end fucntion not found: {function_name}")
 
-                    # Check if the response includes 'geojson' and parse it
-                    if "geojson" in arguments:
-                        raw_geojson = arguments["geojson"].strip()
-                        
-                        # Debug log to inspect
-                        logger.info(f"Raw geojson argument before fix: {raw_geojson}")
-
-                        # Temporary patch to fix double closing braces
-                        while raw_geojson.endswith("}"):
-                            try:
-                                # Try parsing
-                                parsed_geojson = json.loads(raw_geojson)
-                                arguments["geojson"] = parsed_geojson
-                                logger.info("Successfully parsed geojson after fix.")
-                                break
-                            except json.JSONDecodeError:
-                                # Strip last closing brace and try again
-                                raw_geojson = raw_geojson[:-1]
-                        else:
-                            logger.error("Invalid GeoJSON format passed to frontend after attempting fix.")
-                            raise HTTPException(status_code=400, detail="Invalid GeoJSON format.")
-                    
-                    logger.info(f"requesting front end function call: {function_name}")
+                    logger.info(f"requesting front end function call: {function_name} args: {arguments}")
                     # Store simulated function response (for frontend)
                     await database.execute(
                         chat_history_table.insert().values(
@@ -236,7 +229,7 @@ async def chat_with_function_call(
                                 "function_response": {
                                     "name": function_name,
                                     "response": {
-                                        "output": front_end_function_result
+                                        "output": "front end function executed"
                                     }
                                 }
                             }),
@@ -248,7 +241,7 @@ async def chat_with_function_call(
                     # RETURN function call for frontend to execute
                     return FunctionCall(
                         name=function_name,
-                        arguments=arguments,
+                        arguments=front_end_arguments,
                         message="I've updated the map for you."
                     )
 

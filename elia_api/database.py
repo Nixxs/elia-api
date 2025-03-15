@@ -23,6 +23,15 @@ chat_history_table = sqlalchemy.Table(
     sqlalchemy.Column("timestamp", sqlalchemy.DateTime, server_default=sqlalchemy.func.now(), nullable=False),
 )
 
+geometry_table = sqlalchemy.Table(
+    "geometries",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.String, primary_key=True),  # UUID or short string IDs
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, sqlalchemy.ForeignKey("users.id"), nullable=True),  # Optional for ownership tracking
+    sqlalchemy.Column("geometry", sqlalchemy.JSON, nullable=False),  # Full GeoJSON with geometry + attributes
+    sqlalchemy.Column("timestamp", sqlalchemy.DateTime, server_default=sqlalchemy.func.now(), nullable=False)  # Consistent naming
+)
+
 DATABASE_URL = config.DATABASE_URL
 DB_FORCE_ROLL_BACK = config.DB_FORCE_ROLL_BACK
 
