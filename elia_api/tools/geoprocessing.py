@@ -9,33 +9,35 @@ from shapely.geometry import mapping
 from elia_api.utils.database_ops import store_geometry
 
 # NOTE: when you are making functions, just remember the LLM doesn't seem to like complex data structures as params
+# also any function can ask for a map_data: str param this is inject automatically from chat.py and is always sent as part 
+# of the prompt.
 
 @register_backend_function("buffer_features")
-def buffer_features(distance: float, units: str, map_data: str ):
+async def buffer_features(distance: float, units: str, map_data: str, user_id: int = None) -> Dict[str, Any]:
     """
-    Buffer spatial features by a specified distance.
+    Buffer spatial features currently displayed on the map by a specified distance.
 
-    This function takes spatial data currently displayed on the map (as GeoJSON) and buffers
-    the geometries by the specified distance and units. It uses the Geoflip API to perform
-    the buffering and returns the resulting GeoJSON FeatureCollection.
+    This function takes spatial data from the current map (provided automatically as GeoJSON), 
+    applies a buffer operation using the Geoflip API, stores the buffered result, and returns 
+    a 'geometry_id' for future reference.
 
     Args:
         distance: The buffer distance to apply (e.g., 100 for 100 meters).
-        units: The units for the buffer distance can be one of "meters", "kilometers", "miles", or "feet"
-        map_data: Current map data this is provided automatically
+        units: The units for the buffer distance (e.g., "meters", "kilometers", "miles", "feet").
+        map_data: [Provided automatically] Current map data (GeoJSON FeatureCollection as a JSON string).
+        user_id: [Provided automatically] The ID of the user performing this action.
 
     Returns:
-        A he buffered GeoJSON FeatureCollection under the key "geojson" as a string so you can call update_map_data to update the map for the user.
-        If no spatial data is provided, or if an error occurs, returns an error message.
+        A dictionary containing:
+            - geometry_id: A new ID representing the buffered geometry.
 
     Example:
         buffer_features(distance=100, units="meters", map_state={...})
 
     Notes:
-        - The `map_data` argument is supplied automatically by the system.
-        - You (the AI) do not need to ask the user for this value.
-        - The output is always returned in GeoJSON format (EPSG:4326).
-        - This function is intended to be called by the AI assistant to perform geoprocessing operations.
+        - The 'map_data' argument is injected automatically; you do not need to ask for it.
+        - The output is stored and returned as a 'geometry_id' for use in future operations.
+        - To display the result on the map, use 'update_map_data' with the new 'geometry_id'.
     """
 
     try:
@@ -71,7 +73,11 @@ def buffer_features(distance: float, units: str, map_data: str ):
         # Handle response
         if response.status_code == 200:
             buffered_geojson = response.json()
-            return {"geojson": json.dumps(buffered_geojson)}
+
+            # Store buffered geometry and return geometry_id
+            new_geometry_id = await store_geometry(buffered_geojson, user_id=user_id)
+            return {"geometry_id": new_geometry_id}
+
         else:
             return {
                 "error": "Failed to buffer data via Geoflip API.",
@@ -83,31 +89,29 @@ def buffer_features(distance: float, units: str, map_data: str ):
         return {"error": "Request to Geoflip API failed.", "details": str(e)}
 
 @register_backend_function("union_features")
-def union_features(map_data: str):
+async def union_features(map_data: str, user_id: int = None) -> Dict[str, Any]:
     """
-    Union spatial features into a single combined geometry.
+    Union spatial features currently displayed on the map into a single combined geometry.
 
-    This function takes spatial data currently displayed on the map (as GeoJSON) and performs
-    a union operation to merge overlapping or touching geometries into a single geometry.
-    It uses the Geoflip API to perform the union and returns the resulting GeoJSON FeatureCollection.
-    you will probably need to call the update_map_data after doing this to the user's map reflects the change
-    unless you need to follow up with something else
+    This function takes spatial data from the current map (provided automatically as GeoJSON),
+    performs a union operation to merge overlapping or touching geometries using the Geoflip API,
+    stores the unioned result, and returns a 'geometry_id' for future reference.
 
     Args:
-        map_data: Current map data provided automatically (GeoJSON FeatureCollection as a JSON string).
+        map_data: [Provided automatically] Current map data (GeoJSON FeatureCollection as a JSON string).
+        user_id: [Provided automatically] The ID of the user performing this action (optional, for ownership tracking).
 
     Returns:
-        A GeoJSON FeatureCollection under the key "geojson" as a string so you can call update_map_data to update the map for the user.
-        If no spatial data is provided, or if an error occurs, returns an error message.
+        A dictionary containing:
+            - geometry_id: A new ID representing the unioned geometry.
 
     Example:
         union_features(map_state={...})
 
     Notes:
-        - The `map_data` argument is supplied automatically by the system.
-        - You (the AI) do not need to ask the user for this value.
-        - The output is always returned in GeoJSON format (EPSG:4326).
-        - This function is intended to be called by the AI assistant to perform geoprocessing operations.
+        - 'map_data' is injected automatically; you do not need to ask for it.
+        - The output is stored and returned as a 'geometry_id' for use in future operations.
+        - To display the result on the map, use 'update_map_data' with the 'geometry_id' and specify whether to 'add' or 'replace'.
     """
 
     try:
@@ -141,7 +145,11 @@ def union_features(map_data: str):
         # Handle response
         if response.status_code == 200:
             unioned_geojson = response.json()
-            return {"geojson": json.dumps(unioned_geojson)}
+
+            # Store unioned geometry and return geometry_id
+            new_geometry_id = await store_geometry(unioned_geojson, user_id=user_id)
+            return {"geometry_id": new_geometry_id}
+
         else:
             return {
                 "error": "Failed to union data via Geoflip API.",
@@ -151,7 +159,7 @@ def union_features(map_data: str):
 
     except requests.RequestException as e:
         return {"error": "Request to Geoflip API failed.", "details": str(e)}
-
+    
 @register_backend_function("lat_long_to_geojson")
 async def lat_long_to_geojson(latitude: float, longitude: float, label: str, user_id: int = None) -> Dict[str, Any]:
     """

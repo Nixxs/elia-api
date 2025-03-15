@@ -215,7 +215,7 @@ async def chat_with_function_call(
                 else:
                     front_end_arguments = ""
                     if function_name == "update_map_data":
-                        front_end_arguments = await update_map_data(arguments["geometry_id"])
+                        front_end_arguments = await update_map_data(arguments["geometry_id"], arguments["type"])
                     else:
                         logger.error(f"Front end fucntion not found: {function_name}", exc_info=True)
                         raise HTTPException(status_code=500, detail=f"Front end fucntion not found: {function_name}")
