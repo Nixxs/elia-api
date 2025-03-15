@@ -1,9 +1,11 @@
 import requests
 from elia_api.tools.registry import register_backend_function
 from elia_api.config import config
-from geojson import Feature, Point, FeatureCollection
+from geojson import Feature, FeatureCollection
 import json
 from typing import Dict, Any
+from shapely import wkt
+from shapely.geometry import mapping
 
 # NOTE: when you are making functions, just remember the LLM doesn't seem to like complex data structures as params
 
@@ -149,37 +151,91 @@ def union_features(map_data: str):
     except requests.RequestException as e:
         return {"error": "Request to Geoflip API failed.", "details": str(e)}
 
-
 @register_backend_function("lat_long_to_geojson")
 def lat_long_to_geojson(latitude: float, longitude: float, label: str, map_data: str) -> Dict[str, Any]:
     """
-    Convert latitude and longitude into a GeoJSON FeatureCollection, 
-    wrapping a Point geometry in a FeatureCollection to maintain 
-    consistent structure expected by the frontend. Use this when you have only a point
-    and want to call the update_map_data
+    Convert latitude and longitude into a GeoJSON FeatureCollection as a string for map updates.
 
     Args:
         latitude: Latitude of the point.
         longitude: Longitude of the point.
-        map_data: Current map data this is provided automatically
+        label: A label to add as a property to the feature.
+        map_data: Current map data (provided automatically).
 
     Returns:
         A dictionary containing a GeoJSON FeatureCollection as a string.
     """
-    # Create a GeoJSON Point Feature
-    point_feature = Feature(
-        geometry=Point((longitude, latitude)),
-        properties={
-            "label": label
-        }  # Add properties if needed
-    )
 
-    # Wrap the feature in a FeatureCollection
-    feature_collection = FeatureCollection([point_feature])
+    # GeoJSON dict (manually)
+    feature_collection = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [longitude, latitude]  # Note: [lon, lat] order for GeoJSON
+                },
+                "properties": {
+                    "label": label
+                }
+            }
+        ]
+    }
 
-    # Convert FeatureCollection to JSON string for frontend compatibility
-    geojson_str = json.dumps(feature_collection)
+    # Proper JSON string (compact, no line breaks)
+    geojson_str = json.dumps(feature_collection, separators=(",", ":"))
 
     return {
         "geojson": geojson_str
     }
+
+
+
+@register_backend_function("wkt_to_geojson")
+def wkt_to_geojson(rows: str, map_data: str = "") -> Dict[str, Any]:
+    """
+    Convert a list of WKT geometries and their properties (passed as a JSON string) into a GeoJSON FeatureCollection.
+
+    Args:
+        rows: A JSON string of a list of dictionaries, each containing 'wkt' and optional properties.
+              Example: '[{"wkt": "POINT(115.8575 -31.9505)", "name": "Location A"}, {"wkt": "POINT(115.8605 -31.9525)", "name": "Location B"}]'
+        map_data: Current map data (provided automatically, not needed here).
+
+    Returns:
+        A dictionary with 'geojson' key containing the GeoJSON FeatureCollection as a string, this can be used later
+        with update_map_data() to draw the data to the map for the user.
+
+    Notes:
+        - AI should pass a simple JSON string list of objects with 'wkt' and any other properties.
+        - This output is ready to be used in update_map_data().
+    """
+
+    try:
+        rows_list = json.loads(rows)  # Parse JSON string
+
+        features = []
+        for idx, row in enumerate(rows_list):
+            if "wkt" not in row:
+                return {"error": f"Row at index {idx} is missing 'wkt' key."}
+
+            try:
+                geom = wkt.loads(row["wkt"])  # Convert WKT to Shapely geometry
+                geojson_geom = mapping(geom)  # Convert to GeoJSON format
+
+                # Remove 'wkt' from properties
+                properties = {k: v for k, v in row.items() if k != "wkt"}
+
+                feature = Feature(geometry=geojson_geom, properties=properties)
+                features.append(feature)
+
+            except Exception as e:
+                return {"error": f"Failed to parse WKT at row {idx}: {str(e)}"}
+
+        feature_collection = FeatureCollection(features)
+        geojson_str = json.dumps(feature_collection)  # Return as string for frontend
+
+        return {"geojson": geojson_str}
+
+    except json.JSONDecodeError:
+        return {"error": "Invalid JSON format in 'rows'. Must be a valid JSON string list of objects."}
