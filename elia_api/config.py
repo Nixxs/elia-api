@@ -21,11 +21,14 @@ class GlobalConfig(BaseConfig):
     JWT_SECRET: str
 
     GOOGLE_API_KEY: str
+    BIGQUERY_JSON_KEY_B64: str
+    SERVICE_ACCOUNT_WRITE_PATH: str = "/tmp/service-account.json"
     CHAT_HISTORY_LIMIT: int
     GOOGLE_LLM_MODEL: str
 
     GEOFLIP_API_KEY: str
     GEOFLIP_API_URL: str
+
 
     DATABASE_URL: str = ""
 
@@ -37,12 +40,14 @@ class GlobalConfig(BaseConfig):
 
 
 class DevConfig(GlobalConfig):
-    DB_FORCE_ROLL_BACK: bool = True
+    DB_FORCE_ROLL_BACK: bool = False
+    SERVICE_ACCOUNT_WRITE_PATH: str = "./elia_api/keys/service-account.json"
 
 
 class TestConfig(GlobalConfig):
     TEST_DB_NAME: str = "test-db"
     DB_FORCE_ROLL_BACK: bool = True
+    SERVICE_ACCOUNT_WRITE_PATH: str = "./elia_api/keys/service-account.json"
 
     def __init__(self, **values):
         super().__init__(**values)
