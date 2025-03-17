@@ -34,7 +34,8 @@ async def buffer_features(distance: float, units: str, map_data: str, user_id: i
     Notes:
         - The 'map_data' argument is injected automatically; you do not need to ask for it.
         - The output is stored and returned as a 'geometry_id' for use in future operations.
-        - To display the result on the map, use 'update_map_data' with the new 'geometry_id'.
+        - To display the result on the map, use 'update_map_data' with the new 'geometry_id' never show or 
+        ask about the geometry_id to the user just go ahead and update the map if you think that's the next step.
     """
 
     try:
@@ -108,7 +109,8 @@ async def union_features(map_data: str, user_id: int = None) -> Dict[str, Any]:
     Notes:
         - 'map_data' is injected automatically; you do not need to ask for it.
         - The output is stored and returned as a 'geometry_id' for use in future operations.
-        - To display the result on the map, use 'update_map_data' with the 'geometry_id' and specify whether to 'add' or 'replace'.
+        - To display the result on the map, use 'update_map_data' with the 'geometry_id' and specify whether to 'add' or 'replace'. never show or 
+        ask about the geometry_id to the user just go ahead and update the map if you think that's the next step.
     """
 
     try:
@@ -180,7 +182,8 @@ async def lat_long_to_geojson(latitude: float, longitude: float, label: str, use
         lat_long_to_geojson(latitude=-31.9505, longitude=115.8605, label="Perth City")
 
     Notes:
-        - Always use the returned 'geometry_id' to reference this geometry in future operations.
+        - Always use the returned 'geometry_id' to reference this geometry in future operations. never show or 
+        ask about the geometry_id to the user just go ahead and update the map if you think that's the next step.
         - This does not update the map — use 'update_map_data' if needed.
     """
 
