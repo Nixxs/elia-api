@@ -12,35 +12,20 @@ def list_available_tables() -> Dict[str, Any]:
     """
     List and describe all available BigQuery tables for use in data analysis or spatial operations.
 
-    This function provides a list of all tables in the BigQuery dataset, along with a description of each table's 
-    schema. The AI can use this to understand what datasets are available when the user is asking to find data, 
-    perform lookups, or query spatial or tabular information. This is useful when users ask questions like 
-    "What data do you have?", "What datasets are available?", or "Find a dataset with XYZ fields."
+    This function returns fully qualified table names, along with a description of each table's fields.
+    You (the AI) can use this to understand what datasets are available when the user is asking you to do things,
+    perform lookups, or query spatial or tabular information.
 
     Returns:
         A dictionary containing:
             - tables: A list of available tables, where each entry includes:
-                - table_name: The name of the table.
+                - table_name: The fully qualified name of the table (e.g., `gen-lang-client-0136133024.demo_data.table_name`).
                 - description: A description of the table's fields, including field names, types, and any available descriptions.
 
-    Example response:
-        {
-            "tables": [
-                {
-                    "table_name": "parcels",
-                    "description": "Table 'parcels' contains fields: id (STRING); geometry (GEOGRAPHY) - Parcel boundaries; area_ha (FLOAT64) - Area in hectares."
-                },
-                {
-                    "table_name": "roads",
-                    "description": "Table 'roads' contains fields: road_id (STRING); name (STRING); type (STRING) - Road type; geometry (GEOGRAPHY) - Road centerlines."
-                }
-            ]
-        }
-
     Notes:
-        - Use this function when the user asks what data is available or when selecting a table to run further spatial or attribute queries.
-        - You (the AI) can use the field descriptions to guide users on what data can be queried from each table.
-        - This function does not query any data itself — it only lists and describes what tables and fields are available.
+        - Always use these fully qualified table names when building SQL queries.
+        - You can use this function when a user asks "What data do you have?", "What datasets are available?", or similar.
+        - This function does not query data — it only lists available tables and fields for your reference.
     """
     project_id = "gen-lang-client-0136133024"
     dataset_id = "demo_data"
@@ -59,6 +44,7 @@ def list_available_tables() -> Dict[str, Any]:
 
         for table in tables:
             table_id = table.table_id
+            full_table_name = f"`{project_id}.{dataset_id}.{table_id}`"  # Fully qualified name
 
             # Get schema
             table_ref = dataset_ref.table(table_id)
@@ -74,15 +60,15 @@ def list_available_tables() -> Dict[str, Any]:
                 field_descriptions.append(field_info)
 
             description = (
-                f"Table '{table_id}' contains fields: "
+                f"Table {full_table_name} contains fields: "
                 + "; ".join(field_descriptions)
                 + "."
                 if field_descriptions else
-                f"Table '{table_id}' has no defined fields."
+                f"Table {full_table_name} has no defined fields."
             )
 
             tables_info.append({
-                "table_name": table_id,
+                "table_name": full_table_name,  # Fully qualified name provided here
                 "description": description
             })
 
@@ -95,99 +81,119 @@ def list_available_tables() -> Dict[str, Any]:
         }
 
 @register_backend_function("query_table")
-async def query_table(table_name: str, where_clause: str = "", limit: int = 10, map_data: str = "", user_id: int = None) -> Dict[str, Any]:
+async def query_table(
+    table_name: str,
+    where_clause: str = "",
+    limit: int = 10,
+    user_id: int = None,
+    full_query: str = ""
+) -> Dict[str, Any]:
     """
-    Query a BigQuery table with an optional where clause, returning attribute data and spatial data as a geometry_id.
+    Query a BigQuery table and return rows based on either a simple WHERE clause or a full custom SQL query.
+    Automatically handles spatial data if present (GEOGRAPHY columns).
 
-    If the table contains a 'GEOGRAPHY' column (as WKT), the geometry will be converted to GeoJSON, stored in the database, 
-    and returned as a geometry_id. Use this to search for data and reference spatial features.
+    Workflow for AI:
+    1. First, call 'list_available_tables' to see which tables and fields are available.
+    2. Then, call 'query_table' to query a selected table.
+
+    Important:
+    - BigQuery requires fully qualified table names in the format: `gen-lang-client-0136133024.demo_data.table_name`.
+    - You must use the full table name in any SQL query, including in the 'full_query' parameter.
+    - If unsure of table names, always call 'list_available_tables' first and choose from the result.
+    - Do not invent or guess table names — always refer to listed tables.
+
+    Query Options:
+    - You can provide a simple WHERE clause for filtering, or
+    - You can write a full custom BigQuery SQL query (e.g., with joins, aggregations, ordering, spatial filtering).
+    - If 'full_query' is provided, 'where_clause' and 'limit' will be ignored.
+
+    Spatial Data Handling:
+    - If a table contains a GEOGRAPHY column (spatial data in WKT format), it will be automatically converted to GeoJSON and stored as a 'geometry_id'.
+    - You do NOT need to handle spatial data yourself.
+    - 'geometry_id' can be used with 'update_map_data' to show results on a map, but should never be shown or mentioned directly to the user.
 
     Args:
-        table_name: The name of the BigQuery table to query (from 'list_available_tables').
-        where_clause: [Optional] A simple filter (e.g., 'column = "value"'). Case-insensitive.
-        limit: [Optional] Max number of rows to return. Default is 10.
-        map_data: [Provided automatically] Not used.
+        table_name (str): Fully qualified table name (from 'list_available_tables').
+        where_clause (str, optional): Optional WHERE clause to filter rows. Example: "POSTCODE = '6000'".
+        limit (int, optional): Maximum number of rows to return (default 10, max 50).
+        user_id (int, optional): Used internally for storing spatial data.
+        full_query (str, optional): A full BigQuery SQL query. Must use fully qualified table names.
 
     Returns:
-        - rows: List of records with any spatial data as geometry_id.
-        - query: The SQL query that was run.
-
-    Notes:
-        - Spatial data is always returned as geometry_id, never raw geometry.
-        - Use 'update_map_data' with geometry_id to display results.
+        dict:
+            rows (list): List of records. Spatial data (GEOGRAPHY) will be returned as 'geometry_id'.
+            query (str): The exact SQL query that was executed.
     """
 
     project_id = "gen-lang-client-0136133024"
     dataset_id = "demo_data"
-    MAX_LIMIT = 10  # Hard cap to prevent excessive querie
+    MAX_LIMIT = 50  # Adjust this to your acceptable max load
 
     try:
-        # Get BigQuery client
         bigquery_client = get_bigquery_client()
 
-        # Safely quote the table name
-        full_table_name = f"`{project_id}.{dataset_id}.{table_name}`"
+        # Strip backticks for internal API use
+        raw_table_name = table_name.strip("`")
+        table_id = raw_table_name.split(".")[-1]  # Extract table_id part for dataset ref
 
-        # ✅ Ensure limit is an integer
+        # Enforce row limit cap
         limit = min(MAX_LIMIT, max(1, int(limit)))
 
-        # Optional case-insensitive where_clause handling
-        if where_clause.strip():
-            # Simple pattern: column = "value" or column = 'value'
-            pattern = re.compile(r'^\s*(\w+)\s*=\s*[\'"](.+)[\'"]\s*$', re.IGNORECASE)
-            match = pattern.match(where_clause.strip())
-
-            if match:
-                column, value = match.groups()
-                # Wrap both sides with LOWER()
-                where_sql = f"WHERE LOWER({column}) = LOWER('{value}')"
-            else:
-                # Fallback if pattern doesn't match simple format
-                where_sql = f"WHERE {where_clause}"
+        # ----------------------------
+        # Build SQL query
+        # ----------------------------
+        if full_query.strip():
+            query = full_query.strip()  # Use full query directly (AI writes this)
         else:
             where_sql = ""
+            if where_clause.strip():
+                # Simple case-insensitive column matching
+                pattern = re.compile(r'^\s*(\w+)\s*=\s*[\'"](.+)[\'"]\s*$', re.IGNORECASE)
+                match = pattern.match(where_clause.strip())
+                if match:
+                    column, value = match.groups()
+                    where_sql = f"WHERE LOWER({column}) = LOWER('{value}')"
+                else:
+                    where_sql = f"WHERE {where_clause.strip()}"
+            # Use fully qualified table name for SQL
+            query = f"SELECT * FROM {table_name} {where_sql} LIMIT {limit}"
 
-        # Build final query
-        query = f"SELECT * FROM {full_table_name} {where_sql} LIMIT {limit}"
-
-        # Run query
+        # ----------------------------
+        # Execute the query
+        # ----------------------------
         query_job = bigquery_client.query(query)
         results = query_job.result()
 
-        # Get schema to check for GEOGRAPHY fields
-        table_ref = bigquery_client.dataset(dataset_id, project=project_id).table(table_name)
+        # ----------------------------
+        # Get schema to identify spatial (GEOGRAPHY) fields
+        # ----------------------------
+        table_ref = bigquery_client.dataset(dataset_id, project=project_id).table(table_id)
         table_obj = bigquery_client.get_table(table_ref)
         geography_fields = [field.name for field in table_obj.schema if field.field_type.upper() == "GEOGRAPHY"]
 
-        # Prepare rows output
+        # ----------------------------
+        # Process rows & handle spatial data
+        # ----------------------------
         output_rows = []
-
         for row in results:
             row_dict = dict(row)
-
-            # If GEOGRAPHY field exists, convert and store as GeoJSON
             for geo_field in geography_fields:
                 wkt_value = row_dict.get(geo_field)
                 if wkt_value:
                     try:
-                        # Convert WKT to GeoJSON using Shapely
+                        # Convert WKT to GeoJSON
                         geom = wkt.loads(wkt_value)
                         geojson_geom = mapping(geom)
-
-                        # Store as geometry and get ID
+                        # Store GeoJSON as geometry_id
                         geometry_id = await store_geometry({
                             "type": "FeatureCollection",
-                            "features": [
-                                {
-                                    "type": "Feature",
-                                    "geometry": geojson_geom,
-                                    "properties": {}  # Optional: you can decide to pass some properties
-                                }
-                            ]
+                            "features": [{
+                                "type": "Feature",
+                                "geometry": geojson_geom,
+                                "properties": {}
+                            }]
                         }, user_id=user_id)
-
-                        # Replace raw geometry with geometry_id
-                        row_dict[geo_field] = geometry_id
+                        row_dict[geo_field] = geometry_id  # Replace raw WKT with ID
                     except Exception as e:
                         row_dict[geo_field] = f"Error converting geometry: {str(e)}"
 
@@ -195,12 +201,12 @@ async def query_table(table_name: str, where_clause: str = "", limit: int = 10, 
 
         return {
             "rows": output_rows,
-            "query": query  # Let AI know what was actually run
+            "query": query
         }
 
     except Exception as e:
         return {
             "error": "Failed to query BigQuery table.",
             "details": str(e),
-            "query_attempted": query if 'query' in locals() else None  # Include query if it was built
+            "query_attempted": query if 'query' in locals() else None
         }
